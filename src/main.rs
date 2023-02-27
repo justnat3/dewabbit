@@ -19,6 +19,16 @@ struct Dupers {
     dialog: nwg::FileDialog,
 }
 
+fn craft_message<'a>(title: &'a str, content: &'a str) -> nwg::MessageParams<'a> {
+    let p = nwg::MessageParams {
+        title,
+        content,
+        buttons: nwg::MessageButtons::Ok,
+        icons: nwg::MessageIcons::Warning,
+    };
+    p
+}
+
 impl Dupers {
     fn bye(&self) -> std::io::Result<()> {
         if let Some(path) = nwg::Clipboard::data_text(&self.window) {
@@ -28,11 +38,14 @@ impl Dupers {
             let path = Path::new(&path);
             let mut dupes_path = path.to_path_buf();
             dupes_path.push("dupes\\");
+
+            // inline
             let exists = dupes_path.exists();
-            let dupes_path = dupes_path.to_str().unwrap().to_string();
             if !exists {
                 std::fs::create_dir(&dupes_path)?;
             }
+
+            let dupes_path = dupes_path.to_str().unwrap().to_string();
 
             for entry in std::fs::read_dir(path).unwrap() {
                 let entry_path = entry.unwrap().path();
@@ -53,13 +66,12 @@ impl Dupers {
 
                         // Bug: "Cloud Provider not avaliable"
                         if v == 362 {
-                            let p = nwg::MessageParams {
-                                title: "WARNING",
-                                content: "Please log into OneDrive",
-                                buttons: nwg::MessageButtons::Ok,
-                                icons: nwg::MessageIcons::Warning,
-                            };
+                            // include in function
 
+                            let p = craft_message(
+                                "OneDrive Bug",
+                                "Please log into OneDrive before running",
+                            );
                             nwg::message(&p);
                             nwg::stop_thread_dispatch();
                         }
@@ -78,10 +90,14 @@ impl Dupers {
 
                 match map.get(&hash) {
                     Some(val) => {
+                        // get the full path of the dupes folder, this is dyn :)
                         let mut fp = PathBuf::from(dupes_path.clone());
                         let name_of = PathBuf::from(name_of.unwrap()).into_boxed_path();
+
+                        // push the name of the file to the dupes path
                         fp.push(&*name_of);
 
+                        // FIXME: perhaps no clone()? this feels wrong, we are cloning the
                         let ree = entry_path.to_str().clone().unwrap();
 
                         std::fs::copy(PathBuf::from(ree).into_boxed_path(), fp.into_boxed_path())?;
@@ -95,21 +111,12 @@ impl Dupers {
                 };
             }
         } else {
-            let p = nwg::MessageParams {
-                title: "WARNING",
-                content: "A folder with duplicates has not been selected",
-                buttons: nwg::MessageButtons::Ok,
-                icons: nwg::MessageIcons::Warning,
-            };
-            nwg::message(&p);
+            let warning =
+                craft_message("WARNING", "A folder with duplicates has not been selected");
+            nwg::message(&warning);
         }
-        let p = nwg::MessageParams {
-            title: "Good to Go!",
-            content: "All done!",
-            buttons: nwg::MessageButtons::Ok,
-            icons: nwg::MessageIcons::Warning,
-        };
-        nwg::message(&p);
+        let done = craft_message("Good to Go!", "All Done!");
+        nwg::message(&done);
 
         Ok(())
     }
@@ -135,11 +142,12 @@ impl nwg::NativeUi<Ui> for Dupers {
     fn build_ui(mut data: Dupers) -> Result<Ui, nwg::NwgError> {
         use nwg::Event as E;
 
+        // try to transmute all this to derive
         nwg::Window::builder()
             .flags(nwg::WindowFlags::WINDOW | nwg::WindowFlags::VISIBLE)
             .size((256, 200))
             .center(true)
-            .title("Dupers")
+            .title("Dewabbit")
             .icon(Some(&nwg::Icon::from_system(nwg::OemIcon::Ques)))
             .build(&mut data.window)?;
 
@@ -174,16 +182,14 @@ impl nwg::NativeUi<Ui> for Dupers {
                 match evt {
                     E::OnButtonClick => {
                         if &handle == &ui.go_button {
+                            // attempt to remove Result<> from this, handle errors inside the
+                            // function by doing that you will fix your mismatch type issue
                             match Dupers::bye(&ui) {
                                 Ok(_) => nwg::stop_thread_dispatch(),
                                 Err(v) => {
-                                    let p = nwg::MessageParams {
-                                        title: "WARNING",
-                                        content: &format!("Unexpected Error {}", v),
-                                        buttons: nwg::MessageButtons::Ok,
-                                        icons: nwg::MessageIcons::Warning,
-                                    };
-                                    nwg::message(&p);
+                                    let error = &format!("Unexpected Error {}", v);
+                                    let warning = craft_message("WARNING", error);
+                                    nwg::message(&warning);
                                 }
                             };
                         }
@@ -197,6 +203,7 @@ impl nwg::NativeUi<Ui> for Dupers {
             };
         };
 
+        // I believe this functionality is removed inside the
         *ui.default_handler.borrow_mut() = Some(nwg::full_bind_event_handler(
             &ui.inner.window.handle,
             handle_events,
